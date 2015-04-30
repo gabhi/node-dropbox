@@ -35,8 +35,9 @@ app.listen(PORT, () => console.log(`LISTENING http://localhost:${PORT}`))
 app.get('*', setFileMeta, sendHeaders, (req, res) => {
     //if directory, we set it to body 
     //ToDO: improve so less hacky
-     if (req.stat && req.stat.isDirectory){
-        return res.json(res.body)
+    if (req.stat && req.stat.isDirectory) {
+        res.json(res.body)
+        return;
     }
 
     fs.createReadStream(req.filePath).pipe(res);
@@ -44,21 +45,27 @@ app.get('*', setFileMeta, sendHeaders, (req, res) => {
 
 // curl -v http://localhost:8000/ -X HEAD
 app.head('*', setFileMeta, sendHeaders, (req, res) => {
-
+    res.end();
 });
 
 
-app.delete('*', setFileMeta, (req, res, next) => {
+app.delete('*', setFileMeta, sendHeaders, (req, res, next) => {
+    console.log(">< in delete")
     //only call next if it fails
     async() => {
-       if (req.stat && req.stat.isDirectory){
-       	await rimraf.promise(req.filePath)
-       }
-    }().catch(next)
+        if (!req.stat) return res.status(400).send('invalid path')
+        if (req.stat && req.stat.isDirectory()) {
+            await rimraf.promise(req.filePath)
+        } else {
+            await fs.promise.unlink(req.filePath)
+        }
+        res.end()
+    }().catch(next) //only want to call next if it fails
 });
 
 /**
- * set file path
+ * pull the file info
+ * set file path and file stat
  * @param {[type]}   req  [description]
  * @param {[type]}   res  [description]
  * @param {Function} next [description]
@@ -66,14 +73,27 @@ app.delete('*', setFileMeta, (req, res, next) => {
 function setFileMeta(req, res, next) {
     let filePath = path.resolve(path.join(ROOT_DIR, req.url));
     if (filePath.indexOf(ROOT_DIR) !== 0) {
-        return res.send(400, 'invalid path')
+        return res.status(400).send('invalid path')
     }
     req.filePath = filePath; //so you can pass via middle ware to next actions(middleware)
+    console.log(">< set meta")
 
     // next();
     fs.promise.stat(filePath)
-        .then(stat => req.stat = stat, () => req.stat = null)
-        .nodeify(next)//chain promise to resolve cb
+    //?catch errors and do nothing
+    .then(
+        //success
+        stat => req.stat = stat,
+        //error
+        () => {
+            req.stat = null;
+        }
+    )
+
+    //bluebird promises nodeify
+    //chain promise to resolve cb. 
+    //nodeify will pass the results and error to next
+    .nodeify(next)
 }
 /**
  * send headers serves as middleware
@@ -87,24 +107,24 @@ function sendHeaders(req, res, next) {
     //take this promise and connect to next callback
     //no matter error or succss, always go next
     nodeify(async() => {
-    	if (req.stat){
-    		      //TODO: handle if there is not url
-		        if (req.stat.isDirectory()) {
-		            let files = await fs.promise.readdir(req.filePath)
-		            res.body = JSON.stringify(files);
-		            res.setHeader('Content-Length', res.body.length);
-		            res.setHeader('Content-Type', 'application/json')
-		            return
-		        }
-		        //if stat is file
-		        else {
-		            let contentType = mime.contentType(path.extname(req.filePath))
-		            res.setHeader('Content-Length', req.stat.size)
-		            res.setHeader('Content-Type', contentType)
-		        }
-    	
-    	}
-  
+        if (req.stat) {
+            //TODO: handle if there is not url
+            if (req.stat.isDirectory()) {
+                let files = await fs.promise.readdir(req.filePath)
+                res.body = JSON.stringify(files);
+                res.setHeader('Content-Length', res.body.length);
+                res.setHeader('Content-Type', 'application/json')
+                return
+            }
+            //if stat is file
+            else {
+                let contentType = mime.contentType(path.extname(req.filePath))
+                res.setHeader('Content-Length', req.stat.size)
+                res.setHeader('Content-Type', contentType)
+            }
+
+        }
+
     }(), next);
 }
 // function sendHeaders(req, res, next) {
