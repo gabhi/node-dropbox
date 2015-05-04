@@ -31,8 +31,9 @@ outbound.data(['dropbox', 'clients', 'create/update'], function(data) {
 		await fs.promise.writeFile(filename, data.contents)
     }()
 })
-
+// curl -v "http://localhost:8000/foo2/foo2.js" -X DELETE
 outbound.data(['dropbox', 'clients', 'delete'], function(data) {
+    console.log('>< data delete', data)
 	let dirPath = data.type === 'dir'? data.path : path.dirname(data.path)
 	dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
 	let filename = path.resolve(path.join(ROOT_DIR, data.path))

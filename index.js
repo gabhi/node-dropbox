@@ -4,6 +4,10 @@
  * @author  Linghua
  */
 
+//TODO:
+//connection not closed after put a file
+//contents are hardcoded
+
 let path = require('path')
 let fs = require('fs')
 let express = require('express')
