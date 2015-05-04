@@ -12,7 +12,8 @@ let morgan = require('morgan')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
-let args = require('yargs').argv;
+let args = require('yargs').argv
+let nssocket = require('nssocket')
 //to allow use of promise
 require('songbird')
 
@@ -21,6 +22,35 @@ const PORT = process.env.PORT || 8000
 
 let ROOT_DIR = args.dir ? path.resolve(args.dir): path.resolve(process.cwd())
 console.log(">< ROOT DIR", ROOT_DIR)
+
+
+// Create an `nssocket` TCP server
+var tcpServer = nssocket.createServer(function(socket) {
+    // Here `socket` will be an instance of `nssocket.NsSocket`.
+    // let createInfo = {
+    // "action": "update",                        // "update" or "delete"
+    // "path": "/foo/bar.js",
+    // "type": "file",                            // or "file"
+    // "contents": "niuniu2",                            // or the base64 encoded file contents
+    // "pdated": 1427851834642                    // time of creation/deletion/update
+    // }
+    let deleteInfo = {
+    "action": "delete",                        // "update" or "delete"
+    "path": "/foo/bar.js",
+    "type": "file",                            // or "file"
+    "contents": "niuniu2",                            // or the base64 encoded file contents
+    "pdated": 1427851834642                    // time of creation/deletion/update
+    }
+
+    socket.send(['dropbox', 'clients', 'delete'], deleteInfo)
+
+    // socket.send(['dropbox', 'clients', 'create/update'], createInfo)
+})
+// Tell the server to listen on port `6785` and then connect to it
+// using another NsSocket instance.
+tcpServer.listen(6785)
+
+
 
 let app = express()
 
@@ -36,20 +66,20 @@ app.listen(PORT, () => console.log(`LISTENING http://localhost:${PORT}`))
  *  curl -v 'http://localhost:8000/' --get
  */
 app.get('*', setFileMeta, sendHeaders, (req, res) => {
-    //if directory, we set it to body 
+    //if directory, we set it to body
     //ToDO: improve so less hacky
     if (req.stat && req.stat.isDirectory) {
         res.json(res.body)
         return
     }
 
-    fs.createReadStream(req.filePath).pipe(res);
+    fs.createReadStream(req.filePath).pipe(res)
 })
 
 // curl -v http://localhost:8000/ -X HEAD
 app.head('*', setFileMeta, sendHeaders, (req, res) => {
-    res.end();
-});
+    res.end()
+})
 
 
 app.delete('*', setFileMeta, (req, res, next) => {
@@ -63,25 +93,23 @@ app.delete('*', setFileMeta, (req, res, next) => {
             await fs.promise.unlink(req.filePath)
         }
         return res.end()
-      
     }().catch(next) //only want to call next if it fails, since it is the last
-});
+})
 
 //as discussed in forum, we'll use put for both create and update
-app.put('*', setFileMeta,(req, res, next) =>{
+app.put('*', setFileMeta, (req, res, next) =>{
     let filePath = req.filePath
     let isEndWithSlash = req.filePath.charAt(filePath.length-1) === path.sep
     let isFile = path.extname(req.filePath) !== ''
     let isDirectory = isEndWithSlash || !isFile
     let dirPath = isDirectory? req.filePath : path.dirname(filePath)
-    
 
     async() => {
         await mkdirp.promise(dirPath)
-        if (!isDirectory){ 
+        if (!isDirectory){
             //if file exist, truncate first. meaning replace with new content, do a update.
             if (req.stat) {
-                await fs.promise.truncate(req.filePath,0)
+                await fs.promise.truncate(req.filePath, 0)
             }
             req.pipe(fs.createWriteStream(filePath))
         }else{
@@ -89,7 +117,7 @@ app.put('*', setFileMeta,(req, res, next) =>{
         }
     }().catch(next)
    //error automatic catched
-});
+})
 
 /**
  * pull the file info
@@ -110,11 +138,11 @@ function setFileMeta(req, res, next) {
         stat => req.stat = stat,
         //error
         () => {
-            req.stat = null;
+            req.stat = null
         }
     )
     //bluebird promises nodeify
-    //chain promise to resolve cb. 
+    //chain promise to resolve cb.
     //nodeify will pass the results and error to next
     .nodeify(next)
 }
@@ -135,8 +163,8 @@ function sendHeaders(req, res, next) {
                 //TODO: handle if there is not url
                 if (req.stat.isDirectory()) {
                     let files = await fs.promise.readdir(req.filePath) //await always combos with async
-                    res.body = JSON.stringify(files);
-                    res.setHeader('Content-Length', res.body.length); //res get closed when reach that byte of length
+                    res.body = JSON.stringify(files)
+                    res.setHeader('Content-Length', res.body.length) //res get closed when reach that byte of length
                     res.setHeader('Content-Type', 'application/json')
                     return
                 }
@@ -148,5 +176,5 @@ function sendHeaders(req, res, next) {
                 }
             }
         }()
-        , next);
+        , next)
 }
