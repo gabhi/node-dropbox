@@ -11,6 +11,7 @@ let nodeify = require('bluebird-nodeify') //to convert promise to callbacks
 let morgan = require('morgan')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
+let mkdirp = require('mkdirp')
 
 //to allow use of promise
 require('songbird')
@@ -37,7 +38,7 @@ app.get('*', setFileMeta, sendHeaders, (req, res) => {
     //ToDO: improve so less hacky
     if (req.stat && req.stat.isDirectory) {
         res.json(res.body)
-        return;
+        return
     }
 
     fs.createReadStream(req.filePath).pipe(res);
@@ -49,18 +50,43 @@ app.head('*', setFileMeta, sendHeaders, (req, res) => {
 });
 
 
-app.delete('*', setFileMeta, sendHeaders, (req, res, next) => {
-    console.log(">< in delete")
-    //only call next if it fails
+app.delete('*', setFileMeta, (req, res, next) => {
+    //only call next if fails
     async() => {
         if (!req.stat) return res.status(400).send('invalid path')
-        if (req.stat && req.stat.isDirectory()) {
+        if (req.stat.isDirectory()) {
             await rimraf.promise(req.filePath)
+
         } else {
             await fs.promise.unlink(req.filePath)
         }
-        res.end()
-    }().catch(next) //only want to call next if it fails
+        return res.end()
+      
+    }().catch(next) //only want to call next if it fails, since it is the last
+});
+
+//as discussed in forum, we'll use put for both create and update
+app.put('*', setFileMeta,(req, res, next) =>{
+    let filePath = req.filePath
+    let isEndWithSlash = req.filePath.charAt(filePath.length-1) === path.sep
+    let isFile = path.extname(req.filePath) !== ''
+    let isDirectory = isEndWithSlash || !isFile
+    let dirPath = isDirectory? req.filePath : path.dirname(filePath)
+    
+
+    async() => {
+        await mkdirp.promise(dirPath)
+        if (!isDirectory){ 
+            //if file exist, truncate first. meaning replace with new content, do a update.
+            if (req.stat) {
+                await fs.promise.truncate(req.filePath,0)
+            }
+            req.pipe(fs.createWriteStream(filePath))
+        }else{
+          res.end()
+        }
+    }().catch(next)
+   //error automatic catched
 });
 
 /**
@@ -71,16 +97,12 @@ app.delete('*', setFileMeta, sendHeaders, (req, res, next) => {
  * @param {Function} next [description]
  */
 function setFileMeta(req, res, next) {
-    let filePath = path.resolve(path.join(ROOT_DIR, req.url));
+    let filePath = path.resolve(path.join(ROOT_DIR, req.url))
     if (filePath.indexOf(ROOT_DIR) !== 0) {
         return res.status(400).send('invalid path')
     }
-    req.filePath = filePath; //so you can pass via middle ware to next actions(middleware)
-    console.log(">< set meta")
-
-    // next();
-    fs.promise.stat(filePath)
-    //?catch errors and do nothing
+    req.filePath = filePath //so you can pass via middle ware to next actions(middleware)
+    fs.promise.stat(filePath) //catch errors and do nothing
     .then(
         //success
         stat => req.stat = stat,
@@ -89,7 +111,6 @@ function setFileMeta(req, res, next) {
             req.stat = null;
         }
     )
-
     //bluebird promises nodeify
     //chain promise to resolve cb. 
     //nodeify will pass the results and error to next
@@ -104,83 +125,26 @@ function setFileMeta(req, res, next) {
  */
 function sendHeaders(req, res, next) {
     //convert promise back to callback
-    //take this promise and connect to next callback
-    //no matter error or succss, always go next
-    nodeify(async() => {
-        if (req.stat) {
-            //TODO: handle if there is not url
-            if (req.stat.isDirectory()) {
-                let files = await fs.promise.readdir(req.filePath)
-                res.body = JSON.stringify(files);
-                res.setHeader('Content-Length', res.body.length);
-                res.setHeader('Content-Type', 'application/json')
-                return
+    //since no matter error or succss, always go next
+    nodeify(
+        //async is not returning bluebird promise, so we cannot direct chain .nodeify
+        async() => {
+            if (req.stat) {
+                //TODO: handle if there is not url
+                if (req.stat.isDirectory()) {
+                    let files = await fs.promise.readdir(req.filePath) //await always combos with async
+                    res.body = JSON.stringify(files);
+                    res.setHeader('Content-Length', res.body.length); //res get closed when reach that byte of length
+                    res.setHeader('Content-Type', 'application/json')
+                    return
+                }
+                //if stat is file
+                else {
+                    let contentType = mime.contentType(path.extname(req.filePath))
+                    res.setHeader('Content-Length', req.stat.size)
+                    res.setHeader('Content-Type', contentType)
+                }
             }
-            //if stat is file
-            else {
-                let contentType = mime.contentType(path.extname(req.filePath))
-                res.setHeader('Content-Length', req.stat.size)
-                res.setHeader('Content-Type', contentType)
-            }
-
-        }
-
-    }(), next);
+        }()
+        , next);
 }
-// function sendHeaders(req, res, next) {
-//   // send headers logic
-//   console.log("middleware")
-//   // req.setHeader('x-cat', 'niuniu');
-//   next();
-// }
-
-// app.get('*', sendHeaders, (req, res) => {
-// 	console.log(">< in get");
-//    //  let file = fs.readFile(filePath, function(err, file){
-// 			// res.write(file);
-// 			// res.end();
-
-//    //  });
-//    //  TODO:  Support streaming video 
-//     let stream = fs.createReadStream(filePath);
-//     stream.on('open', function(){
-//     	  stream.pipe(res);
-//     })
-//     stream.on('error', function(err){
-//     	 res.end(err);
-//     })
-
-// });
-
-// //curl --head http://localhost:8000
-// //TODO it's always hitting get;
-// app.head('*', sendHeaders, (req, res) => {
-// 	console.log(">< in head")
-//     let stats = fs.statSync(filePath);
-//     let fileSizeInBytes = stats["size"]
-//     let fileMimeType = mime.lookup(filePath);
-//     // console.log("><fileSizeInBytes", fileSizeInBytes);
-//     req.setHeader('Content-Length', fileSizeInBytes);
-//     req.setHeader('Content-Type', 'text/plain');
-//     req.end();
-
-
-// 	// res.setHeader('x-cat', 'niuniu');
-// });
-
-// app.put('*', (req, res) => { 
-// 	let newFilePath = process.cwd() + 'newFile';
-// 	if (fs.existsSync(path)) {
-//     // Do something
-//        res.writeHead('405');
-//        return res.end();
-//     }
-// 	return req.pipe(fs.createWriteStream(newFilePath));
-// });
-
-// app.post('*', (req, res) => { 
-// });
-
-// app.delete('*', (req, res) => {
-//    // fs.unlink(path.join(ROOT_DIR, filePath))
-// });
