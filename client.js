@@ -13,37 +13,37 @@ require('songbird')
 
 //TODO: create one reusable routine for file system operation
 outbound.data(['dropbox', 'clients', 'create/update'], function(data) {
-	console.log('>< data create', data)
-	let dirPath = data.type === 'dir'? data.path : path.dirname(data.path)
-	dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
-	let filename = path.resolve(path.join(ROOT_DIR, data.path))
-	async ()=>{
-		await mkdirp.promise(dirPath)
-		if (data.type === 'dir'){
-			return
-		}
-		console.log(">< not dir")
-		if (data.action === 'update') {
-           await fs.promise.truncate(filename, 0)
+    console.log('>< data create', data)
+    let dirPath = data.type === 'dir' ? data.path : path.dirname(data.path)
+    dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
+    let filename = path.resolve(path.join(ROOT_DIR, data.path))
+    async() => {
+        await mkdirp.promise(dirPath)
+        if (data.type === 'dir') {
+            return
+        }
+        console.log(">< not dir")
+        if (data.action === 'update') {
+            await fs.promise.truncate(filename, 0)
         }
         console.log(">< filename", filename)
         console.log(">< write file", data.contents)
-		await fs.promise.writeFile(filename, data.contents)
+        await fs.promise.writeFile(filename, data.contents)
     }()
 })
 // curl -v "http://localhost:8000/foo2/foo2.js" -X DELETE
 outbound.data(['dropbox', 'clients', 'delete'], function(data) {
     console.log('>< data delete', data)
-	let dirPath = data.type === 'dir'? data.path : path.dirname(data.path)
-	dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
-	let filename = path.resolve(path.join(ROOT_DIR, data.path))
-    async ()=>{
-		if (data.type === 'dir'){
-			await rimraf.promise(dirPath)
-			return
-		}
-		await fs.promise.unlink(filename)
-	}()
+    let dirPath = data.type === 'dir' ? data.path : path.dirname(data.path)
+    dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
+    let filename = path.resolve(path.join(ROOT_DIR, data.path))
+    async() => {
+        if (data.type === 'dir') {
+            await rimraf.promise(dirPath)
+            return
+        }
+        await fs.promise.unlink(filename)
+    }()
 })
 
 outbound.connect(6785)

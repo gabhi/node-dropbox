@@ -15,7 +15,7 @@ let path = require('path')
 let fs = require('fs')
 let express = require('express')
 let nodeify = require('bluebird-nodeify') //to convert promise to callbacks
-// let morgan = require('morgan')
+    // let morgan = require('morgan')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
@@ -32,27 +32,24 @@ require('songbird')
 // const NODE_ENV = process.env.NODE_ENV
 const PORT = process.env.PORT || 8000
 
-let ROOT_DIR = args.dir ? path.resolve(args.dir): path.resolve(process.cwd())
+let ROOT_DIR = args.dir ? path.resolve(args.dir) : path.resolve(process.cwd())
 console.log(">< ROOT DIR", ROOT_DIR)
 
 
 // Create an `nssocket` TCP server
 let tcpServer = nssocket.createServer(function(socket) {
-    // this only works when there is a incoming connection;
-    eventEmitter.on('create/update', function(data){
-      socket.send(['dropbox', 'clients', 'create/update'], data)
-	})
-
-	eventEmitter.on('delete', function(data){
-		socket.send(['dropbox', 'clients', 'delete'], data)
-	})
-
-})
-// Tell the server to listen on port `6785` and then connect to it
-// using another NsSocket instance.
+        // this only works when there is a incoming connection;
+        eventEmitter.on('create/update', function(data) {
+            socket.send(['dropbox', 'clients', 'create/update'], data)
+        })
+        eventEmitter.on('delete', function(data) {
+            socket.send(['dropbox', 'clients', 'delete'], data)
+        })
+    })
+    // Tell the server to listen on port `6785` and then connect to it
+    // using another NsSocket instance.
 tcpServer.listen(6785)
 console.log('TCP Server LISTENING http://localhost:', '6785')
-
 
 
 let app = express()
@@ -87,7 +84,7 @@ app.head('*', setFileMeta, sendHeaders, (req, res) => {
 
 app.delete('*', setFileMeta, (req, res, next) => {
 
-	console.log("><req.filePath", req.filePath)
+    console.log("><req.filePath", req.filePath)
     //only call next if fails
     async() => {
         if (!req.stat) return res.status(400).send('invalid path')
@@ -101,7 +98,7 @@ app.delete('*', setFileMeta, (req, res, next) => {
         eventEmitter.emit('delete', {
             action: 'delete',
             path: req.filePath.replace(ROOT_DIR, ''),
-            type: req.stat.isDirectory()? "dir" : "file",
+            type: req.stat.isDirectory() ? "dir" : "file",
             timestamp: moment().utc()
         })
         return res.end()
@@ -109,33 +106,33 @@ app.delete('*', setFileMeta, (req, res, next) => {
 })
 
 //as discussed in forum, we'll use put for both create and update
-app.put('*', setFileMeta, (req, res, next) =>{
-	// eventEmitter.emit('put', {name: 'niuniu'})
+app.put('*', setFileMeta, (req, res, next) => {
+    // eventEmitter.emit('put', {name: 'niuniu'})
     let filePath = req.filePath
-    let isEndWithSlash = req.filePath.charAt(filePath.length-1) === path.sep
+    let isEndWithSlash = req.filePath.charAt(filePath.length - 1) === path.sep
     let isFile = path.extname(req.filePath) !== ''
     let isDirectory = isEndWithSlash || !isFile
-    let dirPath = isDirectory? req.filePath : path.dirname(filePath)
+    let dirPath = isDirectory ? req.filePath : path.dirname(filePath)
     async() => {
         await mkdirp.promise(dirPath)
-        if (!isDirectory){
+        if (!isDirectory) {
             //if file exist, truncate first. meaning replace with new content, do a update.
             if (req.stat) {
                 await fs.promise.truncate(req.filePath, 0)
             }
             req.pipe(fs.createWriteStream(filePath))
-        }else{
-          res.end()
+        } else {
+            res.end()
         }
-          eventEmitter.emit('create/update', {
-            action: req.stat? 'update': 'create',
+        eventEmitter.emit('create/update', {
+            action: req.stat ? 'update' : 'create',
             path: req.filePath.replace(ROOT_DIR, ''),
-            type: isDirectory? "dir" : "file",
+            type: isDirectory ? "dir" : "file",
             contents: 'hard coded', //TODO
             timestamp: moment().utc()
-          })
+        })
     }().catch(next)
-   //error automatic catched
+    //error automatic catched
 })
 
 /**
@@ -194,6 +191,5 @@ function sendHeaders(req, res, next) {
                     res.setHeader('Content-Type', contentType)
                 }
             }
-        }()
-        , next)
+        }(), next)
 }
