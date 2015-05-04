@@ -7,15 +7,19 @@
 //TODO:
 //connection not closed after put a file
 //contents are hardcoded
+// duplicate folder cause issue
+// separate middle ware to a lib file
+
 
 let path = require('path')
 let fs = require('fs')
 let express = require('express')
 let nodeify = require('bluebird-nodeify') //to convert promise to callbacks
-let morgan = require('morgan')
+// let morgan = require('morgan')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
+let moment = require('moment')
 let args = require('yargs').argv
 let nssocket = require('nssocket')
 
@@ -25,32 +29,15 @@ let eventEmitter = new events.EventEmitter()
 //to allow use of promise
 require('songbird')
 
-const NODE_ENV = process.env.NODE_ENV
+// const NODE_ENV = process.env.NODE_ENV
 const PORT = process.env.PORT || 8000
 
 let ROOT_DIR = args.dir ? path.resolve(args.dir): path.resolve(process.cwd())
 console.log(">< ROOT DIR", ROOT_DIR)
 
 
-
-
 // Create an `nssocket` TCP server
 let tcpServer = nssocket.createServer(function(socket) {
-    // Here `socket` will be an instance of `nssocket.NsSocket`.
-    // let createInfo = {
-    // "action": "update",                        // "update" or "delete"
-    // "path": "/foo/bar.js",
-    // "type": "file",                            // or "file"
-    // "contents": "niuniu2",                            // or the base64 encoded file contents
-    // "pdated": 1427851834642                    // time of creation/deletion/update
-    // }
-    // let deleteInfo = {
-    // "action": "delete",                        // "update" or "delete"
-    // "path": "/foo/bar.js",
-    // "type": "file",                            // or "file"
-    // "contents": "niuniu2",                            // or the base64 encoded file contents
-    // "pdated": 1427851834642                    // time of creation/deletion/update
-    // }
     // this only works when there is a incoming connection;
     eventEmitter.on('create/update', function(data){
       socket.send(['dropbox', 'clients', 'create/update'], data)
@@ -64,18 +51,19 @@ let tcpServer = nssocket.createServer(function(socket) {
 // Tell the server to listen on port `6785` and then connect to it
 // using another NsSocket instance.
 tcpServer.listen(6785)
+console.log('TCP Server LISTENING http://localhost:', '6785')
 
 
 
 let app = express()
 
-//morgan runs first, then run other app.get, or actions
-//depends on declear sequence
-if (NODE_ENV === 'development') {
-    app.use(morgan('dev'))
-}
+// //morgan runs first, then run other app.get, or actions
+// //depends on declear sequence
+// if (NODE_ENV === 'development') {
+//     app.use(morgan('dev'))
+// }
 
-app.listen(PORT, () => console.log(`LISTENING http://localhost:${PORT}`))
+app.listen(PORT, () => console.log(`CRUD Server LISTENING http://localhost:${PORT}`))
 
 /**
  *  curl -v 'http://localhost:8000/' --get
@@ -113,7 +101,8 @@ app.delete('*', setFileMeta, (req, res, next) => {
         eventEmitter.emit('delete', {
             action: 'delete',
             path: req.filePath.replace(ROOT_DIR, ''),
-            type: req.stat.isDirectory()? "dir" : "file"
+            type: req.stat.isDirectory()? "dir" : "file",
+            timestamp: moment().utc()
         })
         return res.end()
     }().catch(next) //only want to call next if it fails, since it is the last
@@ -142,7 +131,8 @@ app.put('*', setFileMeta, (req, res, next) =>{
             action: req.stat? 'update': 'create',
             path: req.filePath.replace(ROOT_DIR, ''),
             type: isDirectory? "dir" : "file",
-            contents: 'hard coded' //TODO
+            contents: 'hard coded', //TODO
+            timestamp: moment().utc()
           })
     }().catch(next)
    //error automatic catched

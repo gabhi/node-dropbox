@@ -28,6 +28,7 @@
     "express": "^4.12.3",
     "mime-types": "^2.0.10",
     "mkdirp": "^0.5.0",
+    "moment": "^2.10.2",
     "morgan": "^1.5.2",
     "nssocket": "^0.5.3",
     "rimraf": "^2.3.3",
