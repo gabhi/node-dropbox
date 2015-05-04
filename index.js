@@ -12,13 +12,15 @@ let morgan = require('morgan')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
-
+let args = require('yargs').argv;
 //to allow use of promise
 require('songbird')
 
 const NODE_ENV = process.env.NODE_ENV
 const PORT = process.env.PORT || 8000
-const ROOT_DIR = path.resolve(process.cwd())
+
+let ROOT_DIR = args.dir ? path.resolve(args.dir): path.resolve(process.cwd())
+console.log(">< ROOT DIR", ROOT_DIR)
 
 let app = express()
 
