@@ -14,6 +14,10 @@ let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
 let args = require('yargs').argv
 let nssocket = require('nssocket')
+
+let events = require('events')
+let eventEmitter = new events.EventEmitter()
+
 //to allow use of promise
 require('songbird')
 
@@ -24,8 +28,10 @@ let ROOT_DIR = args.dir ? path.resolve(args.dir): path.resolve(process.cwd())
 console.log(">< ROOT DIR", ROOT_DIR)
 
 
+
+
 // Create an `nssocket` TCP server
-var tcpServer = nssocket.createServer(function(socket) {
+let tcpServer = nssocket.createServer(function(socket) {
     // Here `socket` will be an instance of `nssocket.NsSocket`.
     // let createInfo = {
     // "action": "update",                        // "update" or "delete"
@@ -34,17 +40,22 @@ var tcpServer = nssocket.createServer(function(socket) {
     // "contents": "niuniu2",                            // or the base64 encoded file contents
     // "pdated": 1427851834642                    // time of creation/deletion/update
     // }
-    let deleteInfo = {
-    "action": "delete",                        // "update" or "delete"
-    "path": "/foo/bar.js",
-    "type": "file",                            // or "file"
-    "contents": "niuniu2",                            // or the base64 encoded file contents
-    "pdated": 1427851834642                    // time of creation/deletion/update
-    }
+    // let deleteInfo = {
+    // "action": "delete",                        // "update" or "delete"
+    // "path": "/foo/bar.js",
+    // "type": "file",                            // or "file"
+    // "contents": "niuniu2",                            // or the base64 encoded file contents
+    // "pdated": 1427851834642                    // time of creation/deletion/update
+    // }
+    // this only works when there is a incoming connection;
+    eventEmitter.on('create/update', function(data){
+      socket.send(['dropbox', 'clients', 'create/update'], data)
+	})
 
-    socket.send(['dropbox', 'clients', 'delete'], deleteInfo)
+	eventEmitter.on('delete', function(data){
+		socket.send(['dropbox', 'clients', 'delete'], data)
+	})
 
-    // socket.send(['dropbox', 'clients', 'create/update'], createInfo)
 })
 // Tell the server to listen on port `6785` and then connect to it
 // using another NsSocket instance.
@@ -83,27 +94,35 @@ app.head('*', setFileMeta, sendHeaders, (req, res) => {
 
 
 app.delete('*', setFileMeta, (req, res, next) => {
+
+	console.log("><req.filePath", req.filePath)
     //only call next if fails
     async() => {
         if (!req.stat) return res.status(400).send('invalid path')
         if (req.stat.isDirectory()) {
+            console.log(">< is dir")
             await rimraf.promise(req.filePath)
-
         } else {
+            console.log(">< is not dir")
             await fs.promise.unlink(req.filePath)
         }
+        eventEmitter.emit('delete', {
+            action: 'delete',
+            path: req.filePath.replace(ROOT_DIR, ''),
+            type: req.stat.isDirectory()? "dir" : "file"
+        })
         return res.end()
     }().catch(next) //only want to call next if it fails, since it is the last
 })
 
 //as discussed in forum, we'll use put for both create and update
 app.put('*', setFileMeta, (req, res, next) =>{
+	// eventEmitter.emit('put', {name: 'niuniu'})
     let filePath = req.filePath
     let isEndWithSlash = req.filePath.charAt(filePath.length-1) === path.sep
     let isFile = path.extname(req.filePath) !== ''
     let isDirectory = isEndWithSlash || !isFile
     let dirPath = isDirectory? req.filePath : path.dirname(filePath)
-
     async() => {
         await mkdirp.promise(dirPath)
         if (!isDirectory){
@@ -115,6 +134,12 @@ app.put('*', setFileMeta, (req, res, next) =>{
         }else{
           res.end()
         }
+          eventEmitter.emit('create/update', {
+            action: req.stat? 'update': 'create',
+            path: req.filePath.replace(ROOT_DIR, ''),
+            type: isDirectory? "dir" : "file",
+            contents: 'hard coded' //TODO
+          })
     }().catch(next)
    //error automatic catched
 })

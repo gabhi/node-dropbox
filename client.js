@@ -22,9 +22,12 @@ outbound.data(['dropbox', 'clients', 'create/update'], function(data) {
 		if (data.type === 'dir'){
 			return
 		}
+		console.log(">< not dir")
 		if (data.action === 'update') {
            await fs.promise.truncate(filename, 0)
         }
+        console.log(">< filename", filename)
+        console.log(">< write file", data.contents)
 		await fs.promise.writeFile(filename, data.contents)
     }()
 })
@@ -39,7 +42,7 @@ outbound.data(['dropbox', 'clients', 'delete'], function(data) {
 			return
 		}
 		await fs.promise.unlink(filename)
-	}();
+	}()
 })
 
 outbound.connect(6785)
