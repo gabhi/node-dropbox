@@ -4,7 +4,6 @@ let nssocket = require('nssocket')
 let mkdirp = require('mkdirp')
 let rimraf = require('rimraf')
 
-
 let outbound = new nssocket.NsSocket()
 let ROOT_DIR = '/tmp/client/'
 
@@ -12,7 +11,7 @@ let ROOT_DIR = '/tmp/client/'
 require('songbird')
 
 //TODO: create one reusable routine for file system operation
-outbound.data(['dropbox', 'clients', 'create/update'], function(data) {
+outbound.data(['dropbox', 'clients', 'create/update'], (data) => {
     console.log('>< data create', data)
     let dirPath = data.type === 'dir' ? data.path : path.dirname(data.path)
     dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
@@ -22,18 +21,14 @@ outbound.data(['dropbox', 'clients', 'create/update'], function(data) {
         if (data.type === 'dir') {
             return
         }
-        console.log(">< not dir")
         if (data.action === 'update') {
             await fs.promise.truncate(filename, 0)
         }
-        console.log(">< filename", filename)
-        console.log(">< write file", data.contents)
         await fs.promise.writeFile(filename, data.contents)
     }()
 })
 // curl -v "http://localhost:8000/foo2/foo2.js" -X DELETE
-outbound.data(['dropbox', 'clients', 'delete'], function(data) {
-    console.log('>< data delete', data)
+outbound.data(['dropbox', 'clients', 'delete'], (data) => {
     let dirPath = data.type === 'dir' ? data.path : path.dirname(data.path)
     dirPath = path.resolve(path.join(ROOT_DIR, dirPath))
     let filename = path.resolve(path.join(ROOT_DIR, data.path))

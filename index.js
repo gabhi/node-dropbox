@@ -5,24 +5,22 @@
  */
 
 //TODO:
-//connection not closed after put a file
-//contents are hardcoded
-// duplicate folder cause issue
 // separate middle ware to a lib file
-
 
 let path = require('path')
 let fs = require('fs')
 let express = require('express')
-let nodeify = require('bluebird-nodeify') //to convert promise to callbacks
-    // let morgan = require('morgan')
+    //to convert promise to callbacks
+let nodeify = require('bluebird-nodeify')
 let mime = require('mime-types')
 let rimraf = require('rimraf')
 let mkdirp = require('mkdirp')
 let moment = require('moment')
 let args = require('yargs').argv
 let nssocket = require('nssocket')
-
+    //to process express req body. other wise req is a stream
+let bodyParser = require('body-parser')
+    //send events from crud server to tcp server
 let events = require('events')
 let eventEmitter = new events.EventEmitter()
 
@@ -53,26 +51,22 @@ console.log('TCP Server LISTENING http://localhost:', '6785')
 
 
 let app = express()
-
-// //morgan runs first, then run other app.get, or actions
-// //depends on declear sequence
-// if (NODE_ENV === 'development') {
-//     app.use(morgan('dev'))
-// }
-
 app.listen(PORT, () => console.log(`CRUD Server LISTENING http://localhost:${PORT}`))
+
+app.use(bodyParser.json()) // for parsing application/json
+app.use(bodyParser.urlencoded({
+    extended: true
+})) // for parsing application/x-www-form-urlencoded
 
 /**
  *  curl -v 'http://localhost:8000/' --get
  */
 app.get('*', setFileMeta, sendHeaders, (req, res) => {
-    //if directory, we set it to body
-    //ToDO: improve so less hacky
-    if (req.stat && req.stat.isDirectory) {
-        res.json(res.body)
-        return
+    //res.body is already set from sendHeaders
+    if (req.stat && req.stat.isDirectory()) {
+        return res.json(res.body)
     }
-
+    console.log(">< req.filePath", req.filePath)
     fs.createReadStream(req.filePath).pipe(res)
 })
 
@@ -83,21 +77,17 @@ app.head('*', setFileMeta, sendHeaders, (req, res) => {
 
 
 app.delete('*', setFileMeta, (req, res, next) => {
-
-    console.log("><req.filePath", req.filePath)
     //only call next if fails
     async() => {
         if (!req.stat) return res.status(400).send('invalid path')
         if (req.stat.isDirectory()) {
-            console.log(">< is dir")
             await rimraf.promise(req.filePath)
         } else {
-            console.log(">< is not dir")
             await fs.promise.unlink(req.filePath)
         }
         eventEmitter.emit('delete', {
             action: 'delete',
-            path: req.filePath.replace(ROOT_DIR, ''),
+            path: req.filePath.replace(ROOT_DIR, ''), //emit relative path
             type: req.stat.isDirectory() ? "dir" : "file",
             timestamp: moment().utc()
         })
@@ -113,6 +103,10 @@ app.put('*', setFileMeta, (req, res, next) => {
     let isFile = path.extname(req.filePath) !== ''
     let isDirectory = isEndWithSlash || !isFile
     let dirPath = isDirectory ? req.filePath : path.dirname(filePath)
+         // when execute curl -v "http://localhost:8000/foo5/foo.js" -d 'niuniu'  -X PUT
+        // 'niuniu' appears in the key location
+        // we need to extract 'niuniu' out
+    let content = Object.keys(req.body)[0]
     async() => {
         await mkdirp.promise(dirPath)
         if (!isDirectory) {
@@ -120,15 +114,18 @@ app.put('*', setFileMeta, (req, res, next) => {
             if (req.stat) {
                 await fs.promise.truncate(req.filePath, 0)
             }
-            req.pipe(fs.createWriteStream(filePath))
-        } else {
-            res.end()
+            await fs.promise.writeFile(filePath, content)
+            // req.pipe(fs.createWriteStream(filePath))
+            // Q: How can we use pipe in this case even for emitter?
+            // Q: how can we handle big file here?
         }
+        res.end()
+
         eventEmitter.emit('create/update', {
             action: req.stat ? 'update' : 'create',
-            path: req.filePath.replace(ROOT_DIR, ''),
+            path: req.filePath.replace(ROOT_DIR, ''), //emit relative path
             type: isDirectory ? "dir" : "file",
-            contents: 'hard coded', //TODO
+            contents: isDirectory ? null : content,
             timestamp: moment().utc()
         })
     }().catch(next)
@@ -179,6 +176,7 @@ function sendHeaders(req, res, next) {
                 //TODO: handle if there is not url
                 if (req.stat.isDirectory()) {
                     let files = await fs.promise.readdir(req.filePath) //await always combos with async
+                    console.log(">< files", files)
                     res.body = JSON.stringify(files)
                     res.setHeader('Content-Length', res.body.length) //res get closed when reach that byte of length
                     res.setHeader('Content-Type', 'application/json')
