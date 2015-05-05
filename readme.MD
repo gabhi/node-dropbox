@@ -72,10 +72,3 @@ There is another TCP server using nssocket that starts with the CRUD server.  Th
 [![solarized dualmode](https://github.com/vanessachem/node-dropbox/blob/master/assets/tcp.gif)](#features)
 
 
-
-
-
-### Walkthrough
-![Video Walkthrough](https://vimeo.com/user39231823/videos)
-
-
