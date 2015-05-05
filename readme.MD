@@ -28,7 +28,8 @@ Time spent: `12 hours`
 
 
 ### GIF:
-## Implemented CRUD for 
+## Implemented CRUD server
+
 Create/Update a new file/folder  using PUT
 ```shellscript
 curl -v "http://localhost:8000/foo" -X PUT
