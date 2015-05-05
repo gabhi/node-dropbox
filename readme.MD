@@ -58,9 +58,24 @@ curl -v "http://localhost:8000/foo/" -X DELETE
 [![solarized dualmode](https://github.com/vanessachem/node-dropbox/blob/master/assets/crud.gif)](#features)
 
 
+## Implemented client-server tcp connection
+
+There is another TCP server using nssocket that starts with the CRUD server.  The purpose of the TCP server is to sync up with the client server.
+
+1. Every CRUD action on the CRUD server emit a event(create/update or delete)
+2. that event get listened by the TCP server
+3. When the TCP server catch the event, it pushes the event to the TCP client.(client.js)
+4. When TCP client receives the event, it executes file system operations for CRUD on it's local copy of system
+5. In my demo. the remote server uses /tmp/server folder. the tcp client uses /tmp/client folder. 
+
+#### gif reference
+[![solarized dualmode](https://github.com/vanessachem/node-dropbox/blob/master/assets/tcp.gif)](#features)
+
+
+
+
 
 ### Walkthrough
-
 ![Video Walkthrough](https://vimeo.com/user39231823/videos)
 
 
