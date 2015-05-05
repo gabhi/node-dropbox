@@ -21,12 +21,21 @@ outbound.data(['dropbox', 'clients', 'create/update'], (data) => {
         if (data.type === 'dir') {
             return
         }
-        if (data.action === 'update') {
+        let hasFile = false
+        await fs.promise.stat(filename) //catch errors and do nothing
+        .then(
+            //success
+            () => hasFile = true,
+            //error
+            () => hasFile = false
+        )
+        if (hasFile) {
             await fs.promise.truncate(filename, 0)
         }
         await fs.promise.writeFile(filename, data.contents)
-    }()
+    }().catch(e => console.log(e))
 })
+
 // curl -v "http://localhost:8000/foo2/foo2.js" -X DELETE
 outbound.data(['dropbox', 'clients', 'delete'], (data) => {
     let dirPath = data.type === 'dir' ? data.path : path.dirname(data.path)
