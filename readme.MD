@@ -2,7 +2,7 @@
 
 This is a basic Dropbox clone to sync files across multiple remote folders.
 
-Time spent: `12 hours`
+Time spent: `15 hours`
 
 ### Features
 
@@ -27,7 +27,6 @@ Time spent: `12 hours`
 - [ ] User can connect to the server using an FTP client
 
 
-### GIF:
 ## Implemented CRUD server
 
 Create/Update a new file/folder  using PUT
